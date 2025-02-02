@@ -42,20 +42,17 @@ conversation_text = "\n".join(
 
 
 prompt = f"""
-Analyze the following interview transcript and generate an evaluation report.
-Include a candidate performance score (out of 10) at the beginning of the Overall Summary section.
-
-Provide structured responses in the following sections:
-
-1. Overall Summary (include performance score)  
-2. Technical Evaluation  
-3. Non-Technical Evaluation  
-4. Strengths & Areas for Improvement  
-5. Final Evaluation  
-6. Next Steps  
-
-Use the provided Pydantic model format.
-
+ Analyze the following interview transcript and generate a detailed evaluation report.
+    Include a performance score (out of 10) at the beginning of the Overall Summary.
+    Provide concise and structured responses in the following sections:
+    1. Overall Summary (with score)
+    2. Technical Evaluation (assess technical knowledge, problem-solving, relevant skills)
+    3. Non-Technical Evaluation (evaluate communication, teamwork, adaptability)
+    4. Strengths (highlight key strengths demonstrated)
+    5. Areas for Improvement (identify gaps and suggest improvements)
+    6. Final Evaluation (summarize suitability for the role)
+    7. Next Steps (recommend follow-up actions)
+    Format the response according to the provided Pydantic model.
 Interview Transcript:
 {conversation_text}
 """
