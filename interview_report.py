@@ -96,7 +96,7 @@ def generate_pdf(interview: InterviewData, evaluation: InterviewEvaluation):
         elements.append(Paragraph(f"<b>{section}</b>", styles['Heading2']))
         elements.append(Spacer(1, 6))
         elements.append(Paragraph(content, styles['Normal']))
-        elements.append(Spacer(1, 12))
+        elements.append(Spacer(1,6))
 
   
     doc.build(elements)
