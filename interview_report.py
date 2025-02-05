@@ -4,9 +4,10 @@ from typing import List
 from langchain.output_parsers import PydanticOutputParser
 from langchain_google_genai import ChatGoogleGenerativeAI
 from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet
-
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
+from reportlab.lib.units import inch
 
 class ConversationEntry(BaseModel):
     question: str
@@ -19,84 +20,126 @@ class InterviewData(BaseModel):
     date: str = Field(..., title="Interview Date")
     conversation: List[ConversationEntry]
 
-
-with open("interview_data.json", "r") as file:
-    data = json.load(file)
-interview = InterviewData(**data)
-
 class InterviewEvaluation(BaseModel):
+    performance_score: float
     overall_summary: str 
-    technical_evaluation: str
-    non_technical_evaluation: str
-    strengths_areas_for_improvement: str
-    final_evaluation: str
-    next_steps: str
+    technical_competence: str
+    communication_skills: str
+    professional_demeanor: str
+    growth_potential: str
+    final_recommendation: str
+
+def create_apa_prompt(conversation_text):
+    return f"""Conduct a comprehensive, academically rigorous evaluation of the interview transcript using a systematic, evidence-based approach.
+
+Evaluation Framework:
+- Utilize a holistic, multi-dimensional assessment methodology
+- Provide quantitative and qualitative insights
+- Maintain objectivity and professional neutrality
+
+Specific Assessment Criteria:
+1. Performance Score (0-10 scale):
+   - Derive from comprehensive analysis of candidate's responses
+   - Consider technical knowledge, communication clarity
+
+2. Technical Competence Evaluation:
+   - Assess depth of domain-specific knowledge
+   - Analyze complexity of technical understanding
+   - Evaluate practical application capabilities
+
+3. Communication Skills Assessment:
+   - Analyze clarity, structure, and coherence of responses
+   - Evaluate ability to articulate complex ideas
+   - Assess professional communication effectiveness
+
+4. Professional Demeanor:
+   - Assess cultural alignment
+   - Evaluate interpersonal skills
+   - Analyze adaptability and learning orientation
+
+5. Growth Potential:
+   - Identify potential for professional development
+   - Assess alignment with organizational growth trajectory
+   - Evaluate long-term contribution potential
+
+6. Final Recommendation:
+   - Provide clear, evidence-based hiring recommendation
+   - Highlight potential risks and opportunities
+
+Interview Transcript:
+{conversation_text}
+
+Provide a structured, academic-style evaluation addressing each specified dimension."""
 
 gemini = ChatGoogleGenerativeAI(model="gemini-pro", temperature=0, google_api_key="AIzaSyA9usph-F3M_HaZoKrzg3BOSHfSrekGwmw")
 parser = PydanticOutputParser(pydantic_object=InterviewEvaluation)
 
+def generate_apa_pdf(interview: InterviewData, evaluation: InterviewEvaluation):
+    filename = f"Interview_Report_{interview.name.replace(' ', '_')}.pdf"
+    doc = SimpleDocTemplate(filename, pagesize=A4, leftMargin=inch, rightMargin=inch, topMargin=0.5*inch, bottomMargin=0.5*inch)
+    
+    styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle(name='APATitle', parent=styles['Title'], fontSize=16, alignment=1))
+    styles.add(ParagraphStyle(name='APAHeading', parent=styles['Heading2'], fontSize=12, spaceAfter=6))
+    styles.add(ParagraphStyle(name='APANormal', parent=styles['Normal'], fontSize=11, leading=14))
+    
+    elements = []
+
+    # Title Page
+    elements.append(Paragraph("Interview Evaluation Report", styles['APATitle']))
+    elements.append(Spacer(1, 12))
+    
+    # Candidate Information Table
+    candidate_data = [
+        ['Candidate Name', interview.name],
+        ['Email', interview.email],
+        ['Position', interview.role],
+        ['Interview Date', interview.date]
+    ]
+    candidate_table = Table(candidate_data, colWidths=[2*inch, 4*inch])
+    candidate_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.grey),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+        ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,0), 10),
+        ('BOTTOMPADDING', (0,0), (-1,0), 12),
+        ('BACKGROUND', (0,1), (0,-1), colors.beige),
+        ('GRID', (0,0), (-1,-1), 1, colors.black)
+    ]))
+    elements.append(candidate_table)
+    elements.append(Spacer(1, 12))
+
+    # Performance Sections
+    sections = [
+        ('Performance Score', f"{evaluation.performance_score}/10"),
+        ('Overall Summary', evaluation.overall_summary),
+        ('Technical Competence', evaluation.technical_competence),
+        ('Communication Skills', evaluation.communication_skills),
+        ('Professional Demeanor', evaluation.professional_demeanor),
+        ('Growth Potential', evaluation.growth_potential),
+        ('Final Recommendation', evaluation.final_recommendation)
+    ]
+
+    for title, content in sections:
+        elements.append(Paragraph(title, styles['APAHeading']))
+        elements.append(Paragraph(content, styles['APANormal']))
+        elements.append(Spacer(1, 6))
+
+    doc.build(elements)
+    print(f"APA-formatted report saved as {filename}")
+
+# Main execution
+with open("interview_data.json", "r") as file:
+    data = json.load(file)
+interview = InterviewData(**data)
 
 conversation_text = "\n".join(
     [f"Q: {entry.question}\nA: {entry.answer}\n" for entry in interview.conversation]
 )
 
-
-prompt = f"""
- Analyze the following interview transcript and generate a detailed evaluation report.
-    Include a performance score (out of 10) at the beginning of the Overall Summary.
-    Provide concise and structured responses in the following sections:
-    1. Overall Summary (with score)
-    2. Technical Evaluation (assess technical knowledge, problem-solving, relevant skills)
-    3. Non-Technical Evaluation (evaluate communication, teamwork, adaptability)
-    4. Strengths (highlight key strengths demonstrated)
-    5. Areas for Improvement (identify gaps and suggest improvements)
-    6. Final Evaluation (summarize suitability for the role)
-    7. Next Steps (recommend follow-up actions)
-    Format the response according to the provided Pydantic model.
-Interview Transcript:
-{conversation_text}
-"""
-
+prompt = create_apa_prompt(conversation_text)
 response = gemini.invoke(prompt + "\n" + parser.get_format_instructions())
 evaluation = parser.parse(response.content)
 
-def generate_pdf(interview: InterviewData, evaluation: InterviewEvaluation):
-    filename = f"Interview_Report_{interview.name.replace(' ', '_')}.pdf"
-    doc = SimpleDocTemplate(filename, pagesize=A4)
-    styles = getSampleStyleSheet()
-    elements = []
-
-    elements.append(Paragraph("AI-Based Interview Evaluation Report", styles['Title']))
-    elements.append(Spacer(1, 12))
-
-    # Candidate Info
-    candidate_info = f"""
-    <b>Candidate Name:</b> {interview.name}<br/>
-    <b>Email:</b> {interview.email}<br/>
-    <b>Role:</b> {interview.role}<br/>
-    <b>Interview Date:</b> {interview.date}<br/>
-    """
-    elements.append(Paragraph(candidate_info, styles['Normal']))
-    elements.append(Spacer(1, 12))
-
-   
-    sections = {
-        "Overall Summary (including Score)": evaluation.overall_summary,
-        "Technical Evaluation": evaluation.technical_evaluation,
-        "Non-Technical Evaluation": evaluation.non_technical_evaluation,
-        "Strengths & Areas for Improvement": evaluation.strengths_areas_for_improvement,
-        "Final Evaluation": evaluation.final_evaluation,
-        "Next Steps": evaluation.next_steps,
-    }
-
-    for section, content in sections.items():
-        elements.append(Paragraph(f"<b>{section}</b>", styles['Heading2']))
-        elements.append(Spacer(1, 6))
-        elements.append(Paragraph(content, styles['Normal']))
-        elements.append(Spacer(1,6))
-
-  
-    doc.build(elements)
-    print(f"Report saved as {filename}")
-
-generate_pdf(interview, evaluation)
+generate_apa_pdf(interview, evaluation)
